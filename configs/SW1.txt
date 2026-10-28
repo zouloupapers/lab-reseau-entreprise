@@ -1,0 +1,95 @@
+! ============================================================
+! SW1 - commutateur d'acces : VLAN, trunk, port-security
+! Modele Packet Tracer : Cisco 2960
+! Remplacer CHANGE_ME par vos propres mots de passe avant de coller
+! ============================================================
+hostname SW1
+no ip domain-lookup
+service password-encryption
+enable secret CHANGE_ME
+username admin secret CHANGE_ME
+banner motd # Acces reserve aux administrateurs du labo #
+!
+! --- VLAN ---
+vlan 10
+ name ADMIN
+vlan 20
+ name RH
+vlan 30
+ name SERVEURS
+vlan 40
+ name INVITES
+vlan 99
+ name GESTION
+vlan 666
+ name PARKING
+vlan 999
+ name NATIVE
+!
+! --- Trunk vers R2-CORE (VLAN natif dedie, pas de DTP) ---
+interface GigabitEthernet0/1
+ description Trunk vers R2-CORE
+ switchport mode trunk
+ switchport trunk native vlan 999
+ switchport trunk allowed vlan 10,20,30,40,99
+ switchport nonegotiate
+!
+! --- Ports d'acces par service ---
+interface range FastEthernet0/1 - 5
+ description ADMIN
+ switchport mode access
+ switchport access vlan 10
+interface range FastEthernet0/6 - 10
+ description RH
+ switchport mode access
+ switchport access vlan 20
+interface range FastEthernet0/11 - 12
+ description SERVEURS
+ switchport mode access
+ switchport access vlan 30
+interface range FastEthernet0/13 - 20
+ description INVITES
+ switchport mode access
+ switchport access vlan 40
+!
+! --- Securite des ports utilisateurs ---
+interface range FastEthernet0/1 - 20
+ spanning-tree portfast
+ spanning-tree bpduguard enable
+ switchport port-security
+ switchport port-security maximum 2
+ switchport port-security mac-address sticky
+ switchport port-security violation restrict
+!
+! --- Ports inutilises : VLAN parking + desactives ---
+interface range FastEthernet0/21 - 24 , GigabitEthernet0/2
+ description Port inutilise
+ switchport mode access
+ switchport access vlan 666
+ shutdown
+!
+! --- Gestion du commutateur (VLAN 99) ---
+interface Vlan99
+ description Gestion
+ ip address 192.168.99.2 255.255.255.0
+ no shutdown
+ip default-gateway 192.168.99.1
+!
+ip domain-name lab.local
+crypto key generate rsa general-keys modulus 2048
+ip ssh version 2
+!
+ip access-list standard MGMT-ACCESS
+ permit 192.168.10.0 0.0.0.255
+ permit 192.168.99.0 0.0.0.255
+!
+line vty 0 15
+ login local
+ transport input ssh
+ access-class MGMT-ACCESS in
+ exec-timeout 10 0
+line console 0
+ login local
+ exec-timeout 10 0
+!
+end
