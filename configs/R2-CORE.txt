@@ -1,0 +1,112 @@
+! ============================================================
+! R2-CORE - routage inter-VLAN (router-on-a-stick), DHCP, ACL, OSPF
+! Modele Packet Tracer : Cisco 2911
+! Remplacer CHANGE_ME par vos propres mots de passe avant de coller
+! ============================================================
+hostname R2-CORE
+no ip domain-lookup
+service password-encryption
+enable secret CHANGE_ME
+username admin secret CHANGE_ME
+banner motd # Acces reserve aux administrateurs du labo #
+!
+! --- SSH ---
+ip domain-name lab.local
+crypto key generate rsa general-keys modulus 2048
+ip ssh version 2
+!
+ip access-list standard MGMT-ACCESS
+ remark Seuls les VLAN ADMIN et GESTION peuvent administrer les equipements
+ permit 192.168.10.0 0.0.0.255
+ permit 192.168.99.0 0.0.0.255
+!
+line vty 0 4
+ login local
+ transport input ssh
+ access-class MGMT-ACCESS in
+ exec-timeout 10 0
+line console 0
+ login local
+ exec-timeout 10 0
+!
+! --- DHCP (VLAN 30 SERVEURS en adressage statique) ---
+ip dhcp excluded-address 192.168.10.1 192.168.10.10
+ip dhcp excluded-address 192.168.20.1 192.168.20.10
+ip dhcp excluded-address 192.168.40.1 192.168.40.10
+!
+ip dhcp pool VLAN10-ADMIN
+ network 192.168.10.0 255.255.255.0
+ default-router 192.168.10.1
+ dns-server 192.168.30.10
+ip dhcp pool VLAN20-RH
+ network 192.168.20.0 255.255.255.0
+ default-router 192.168.20.1
+ dns-server 192.168.30.10
+ip dhcp pool VLAN40-INVITES
+ network 192.168.40.0 255.255.255.0
+ default-router 192.168.40.1
+ dns-server 192.168.30.10
+!
+! --- ACL : le reseau invites n'a acces qu'a Internet (+ DHCP et DNS) ---
+ip access-list extended INVITES-IN
+ remark Autoriser DHCP (le client n'a pas encore d'adresse)
+ permit udp any any eq bootps
+ remark Autoriser la resolution DNS vers le serveur interne
+ permit udp 192.168.40.0 0.0.0.255 host 192.168.30.10 eq domain
+ remark Bloquer tout le reste du reseau interne
+ deny ip 192.168.40.0 0.0.0.255 192.168.0.0 0.0.255.255
+ deny ip 192.168.40.0 0.0.0.255 10.0.0.0 0.255.255.255
+ remark Autoriser Internet
+ permit ip 192.168.40.0 0.0.0.255 any
+!
+! --- Lien vers R1-EDGE ---
+interface GigabitEthernet0/1
+ description Lien vers R1-EDGE
+ ip address 10.0.0.2 255.255.255.252
+ no shutdown
+!
+! --- Trunk 802.1Q vers SW1 : une sous-interface par VLAN ---
+interface GigabitEthernet0/0
+ description Trunk vers SW1
+ no ip address
+ no shutdown
+!
+interface GigabitEthernet0/0.10
+ description VLAN 10 ADMIN
+ encapsulation dot1Q 10
+ ip address 192.168.10.1 255.255.255.0
+!
+interface GigabitEthernet0/0.20
+ description VLAN 20 RH
+ encapsulation dot1Q 20
+ ip address 192.168.20.1 255.255.255.0
+!
+interface GigabitEthernet0/0.30
+ description VLAN 30 SERVEURS
+ encapsulation dot1Q 30
+ ip address 192.168.30.1 255.255.255.0
+!
+interface GigabitEthernet0/0.40
+ description VLAN 40 INVITES
+ encapsulation dot1Q 40
+ ip address 192.168.40.1 255.255.255.0
+ ip access-group INVITES-IN in
+!
+interface GigabitEthernet0/0.99
+ description VLAN 99 GESTION
+ encapsulation dot1Q 99
+ ip address 192.168.99.1 255.255.255.0
+!
+! --- OSPF : annonce des VLAN, adjacence uniquement vers R1 ---
+router ospf 1
+ router-id 2.2.2.2
+ passive-interface default
+ no passive-interface GigabitEthernet0/1
+ network 10.0.0.0 0.0.0.3 area 0
+ network 192.168.10.0 0.0.0.255 area 0
+ network 192.168.20.0 0.0.0.255 area 0
+ network 192.168.30.0 0.0.0.255 area 0
+ network 192.168.40.0 0.0.0.255 area 0
+ network 192.168.99.0 0.0.0.255 area 0
+!
+end
