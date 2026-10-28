@@ -1,0 +1,21 @@
+! ============================================================
+! ISP - routeur qui simule le fournisseur d'acces Internet
+! Modele Packet Tracer : Cisco 2911
+! Coller en mode "configure terminal"
+! ============================================================
+hostname ISP
+no ip domain-lookup
+!
+interface GigabitEthernet0/0
+ description Lien vers R1-EDGE
+ ip address 203.0.113.1 255.255.255.252
+ no shutdown
+!
+! Loopback qui joue le role d'un serveur "sur Internet"
+interface Loopback0
+ description Hote Internet simule
+ ip address 198.51.100.1 255.255.255.255
+!
+! Pas de route vers 192.168.0.0/16 : grace au NAT de R1,
+! l'ISP ne voit que l'adresse publique 203.0.113.2.
+end
